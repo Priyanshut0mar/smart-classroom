@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Smart Classroom Monitor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#060912;--surface:#0d1320;--card:#111827;--border:#1a2535;
+  --t:#ff5722;--h:#00bcd4;--a:#69f0ae;--ai:#ce93d8;
+  --ok:#4caf50;--warn:#ff9800;--err:#f44336;
+  --text:#eceff1;--muted:#546e7a;--dim:#263238;
+  --font:'Outfit',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;
+  background-image:
+    radial-gradient(circle at 15% 15%,rgba(255,87,34,.04) 0%,transparent 40%),
+    radial-gradient(circle at 85% 85%,rgba(0,188,212,.04) 0%,transparent 40%),
+    radial-gradient(circle at 50% 50%,rgba(105,240,174,.02) 0%,transparent 60%);}
+
+/* ── HEADER ── */
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:1rem 2rem;border-bottom:1px solid var(--border);
+  background:rgba(6,9,18,.9);backdrop-filter:blur(12px);
+  position:sticky;top:0;z-index:100;}
+.brand{display:flex;align-items:center;gap:.8rem;}
+.brand-pulse{
+  width:8px;height:8px;border-radius:50%;background:var(--ok);
+  box-shadow:0 0 0 0 rgba(76,175,80,.4);
+  animation:heartbeat 2s infinite;}
+@keyframes heartbeat{
+  0%{box-shadow:0 0 0 0 rgba(76,175,80,.4);}
+  70%{box-shadow:0 0 0 8px rgba(76,175,80,0);}
+  100%{box-shadow:0 0 0 0 rgba(76,175,80,0);}}
+.brand h1{font-size:1rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  background:linear-gradient(135deg,var(--text),var(--h));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.header-meta{display:flex;align-items:center;gap:1rem;}
+.meta-chip{font-family:var(--mono);font-size:.68rem;padding:.25rem .6rem;
+  border-radius:4px;border:1px solid var(--border);color:var(--muted);}
+.meta-chip.live{border-color:rgba(76,175,80,.4);color:var(--ok);}
+#clock{font-family:var(--mono);font-size:.8rem;color:var(--muted);}
+
+/* ── LAYOUT ── */
+main{padding:1.5rem 2rem;max-width:1600px;margin:0 auto;}
+.sec-title{
+  font-size:.6rem;letter-spacing:.25em;text-transform:uppercase;color:var(--muted);
+  display:flex;align-items:center;gap:.6rem;margin-bottom:1.2rem;margin-top:2rem;}
+.sec-title::after{content:'';flex:1;height:1px;background:var(--border);}
+.sec-title:first-child{margin-top:0;}
+
+/* ── GAUGES ── */
+.gauges-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;margin-bottom:.5rem;}
+@media(max-width:800px){.gauges-row{grid-template-columns:1fr;}}
+.gauge-card{
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:1.4rem;position:relative;overflow:hidden;
+  transition:border-color .3s,transform .2s;}
+.gauge-card:hover{transform:translateY(-2px);}
+.gauge-card::after{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:var(--gc);border-radius:2px 2px 0 0;}
+.gauge-card.gc-t{--gc:var(--t);}
+.gauge-card.gc-h{--gc:var(--h);}
+.gauge-card.gc-a{--gc:var(--a);}
+.gauge-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;}
+.gauge-name{font-size:.65rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);}
+.g-status{font-family:var(--mono);font-size:.6rem;padding:.18rem .5rem;border-radius:3px;font-weight:700;}
+.s-ok  {background:rgba(76,175,80,.15);color:var(--ok);}
+.s-warn{background:rgba(255,152,0,.15);color:var(--warn);}
+.s-err {background:rgba(244,67,54,.15);color:var(--err);}
+.arc-wrap{display:flex;justify-content:center;margin-bottom:.8rem;}
+.arc-wrap svg{width:150px;height:90px;overflow:visible;}
+.g-val{text-align:center;font-family:var(--mono);font-size:2.2rem;font-weight:700;line-height:1;}
+.g-val sup{font-size:.9rem;font-weight:300;color:var(--muted);}
+.g-lim{text-align:center;font-family:var(--mono);font-size:.65rem;color:var(--muted);margin-top:.3rem;}
+
+/* ── CHART CARD ── */
+.chart-card{
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:1.4rem;margin-bottom:1.2rem;}
+.chart-toolbar{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.2rem;align-items:center;}
+.tb-group{display:flex;gap:.3rem;}
+.tb-sep{width:1px;background:var(--border);margin:0 .2rem;}
+.tbtn{
+  font-family:var(--mono);font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;
+  padding:.35rem .8rem;border-radius:5px;cursor:pointer;
+  background:transparent;border:1px solid var(--border);color:var(--muted);
+  transition:all .18s;}
+.tbtn:hover{color:var(--text);border-color:var(--muted);}
+.tbtn.ar{border-color:var(--h);color:var(--h);background:rgba(0,188,212,.08);}
+.tbtn.mt{border-color:var(--t);color:var(--t);background:rgba(255,87,34,.08);}
+.tbtn.mh{border-color:var(--h);color:var(--h);background:rgba(0,188,212,.08);}
+.tbtn.ma{border-color:var(--a);color:var(--a);background:rgba(105,240,174,.08);}
+.chart-box{position:relative;height:260px;}
+
+/* ── FORECAST ── */
+.forecast-card{
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:1.4rem;margin-bottom:1.2rem;}
+.fc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.2rem;}
+.fc-label{display:flex;align-items:center;gap:.5rem;font-size:.65rem;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--ai);}
+.fc-dot{width:6px;height:6px;border-radius:50%;background:var(--ai);animation:heartbeat 2s infinite;}
+#fc-btn{
+  font-family:var(--mono);font-size:.7rem;padding:.45rem 1.1rem;border-radius:6px;
+  cursor:pointer;background:rgba(206,147,216,.12);color:var(--ai);
+  border:1px solid rgba(206,147,216,.3);transition:all .2s;}
+#fc-btn:hover{background:rgba(206,147,216,.25);}
+#fc-btn:disabled{opacity:.4;cursor:wait;}
+.fc-chart-box{height:220px;position:relative;margin-bottom:1rem;}
+.fc-insight{
+  background:rgba(206,147,216,.05);border:1px solid rgba(206,147,216,.15);
+  border-radius:8px;padding:.9rem 1.1rem;font-size:.82rem;line-height:1.7;
+  color:var(--text);min-height:50px;}
+.fc-insight em{color:var(--muted);font-size:.75rem;}
+
+/* ── SETTINGS ── */
+.settings-card{
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:1.4rem;margin-bottom:1.2rem;}
+.settings-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;}
+@media(max-width:640px){.settings-grid{grid-template-columns:1fr;}}
+.si label{display:block;font-size:.62rem;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:.5rem;}
+.si input[type=range]{width:100%;accent-color:var(--h);cursor:pointer;}
+.si .sv{font-family:var(--mono);font-size:.85rem;text-align:right;margin-top:.2rem;}
+.save-btn{
+  display:block;margin-left:auto;margin-top:1.1rem;
+  font-family:var(--mono);font-size:.72rem;padding:.55rem 1.4rem;border-radius:6px;
+  cursor:pointer;background:rgba(76,175,80,.12);color:var(--ok);
+  border:1px solid rgba(76,175,80,.3);transition:all .2s;}
+.save-btn:hover{background:rgba(76,175,80,.25);}
+
+/* ── ALERT LOG ── */
+.alert-card{
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:1.4rem;}
+#alert-list{list-style:none;max-height:240px;overflow-y:auto;}
+#alert-list::-webkit-scrollbar{width:3px;}
+#alert-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+#alert-list li{
+  display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:.7rem;
+  padding:.5rem 0;border-bottom:1px solid rgba(255,255,255,.03);
+  font-family:var(--mono);font-size:.75rem;}
+#alert-list li:last-child{border-bottom:none;}
+.al-icon{font-size:.9rem;}
+.al-msg{color:var(--text);}
+.al-time{color:var(--muted);font-size:.65rem;white-space:nowrap;}
+.no-alert{color:var(--muted);font-size:.78rem;font-style:italic;padding:.5rem 0;}
+
+/* ── TOAST ── */
+.toast{
+  position:fixed;bottom:1.5rem;right:1.5rem;
+  background:var(--card);border:1px solid var(--border);border-radius:8px;
+  padding:.7rem 1.1rem;font-family:var(--mono);font-size:.75rem;
+  transform:translateY(80px);opacity:0;transition:all .25s;z-index:999;}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.ok{border-color:rgba(76,175,80,.5);color:var(--ok);}
+.toast.err{border-color:rgba(244,67,54,.5);color:var(--err);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-pulse"></div>
+    <h1>Smart Classroom Monitor</h1>
+  </div>
+  <div class="header-meta">
+    <span class="meta-chip live">&#9679; LIVE</span>
+    <span class="meta-chip" id="last-update">--:--:--</span>
+    <span id="clock"></span>
+  </div>
+</header>
+
+<main>
+
+  <!-- GAUGES -->
+  <div class="sec-title">Live Sensor Readings</div>
+  <div class="gauges-row">
+
+    <div class="gauge-card gc-t">
+      <div class="gauge-top">
+        <span class="gauge-name">&#127777; Temperature</span>
+        <span class="g-status s-ok" id="st-temp">OK</span>
+      </div>
+      <div class="arc-wrap">
+        <svg viewBox="0 0 150 90">
+          <path d="M15,80 A55,55,0,0,1,135,80" fill="none" stroke="#1a2535" stroke-width="10" stroke-linecap="round"/>
+          <path d="M15,80 A55,55,0,0,1,135,80" fill="none" stroke="var(--t)" stroke-width="10"
+            stroke-linecap="round" stroke-dasharray="172" stroke-dashoffset="172" id="arc-temp"
+            style="transition:stroke-dashoffset .8s ease;filter:drop-shadow(0 0 4px var(--t));"/>
+        </svg>
+      </div>
+      <div class="g-val" id="vt" style="color:var(--t)">--<sup>°C</sup></div>
+      <div class="g-lim">Limit: <span id="lt">30</span>°C</div>
+    </div>
+
+    <div class="gauge-card gc-h">
+      <div class="gauge-top">
+        <span class="gauge-name">&#128167; Humidity</span>
+        <span class="g-status s-ok" id="st-hum">OK</span>
+      </div>
+      <div class="arc-wrap">
+        <svg viewBox="0 0 150 90">
+          <path d="M15,80 A55,55,0,0,1,135,80" fill="none" stroke="#1a2535" stroke-width="10" stroke-linecap="round"/>
+          <path d="M15,80 A55,55,0,0,1,135,80" fill="none" stroke="var(--h)" stroke-width="10"
+            stroke-linecap="round" stroke-dasharray="172" stroke-dashoffset="172" id="arc-hum"
+            style="transition:stroke-dashoffset .8s ease;filter:drop-shadow(0 0 4px var(--h));"/>
+        </svg>
+      </div>
+      <div class="g-val" id="vh" style="color:var(--h)">--<sup>%</sup></div>
+      <div class="g-lim">Limit: <span id="lh">75</span>%</div>
+    </div>
+
+    <div class="gauge-card gc-a">
+      <div class="gauge-top">
+        <span class="gauge-name">&#127787; Air Quality</span>
+        <span class="g-status s-ok" id="st-air">OK</span>
+      </div>
+      <div class="arc-wrap">
+        <svg viewBox="0 0 150 90">
+          <path d="M15,80 A55,55,0,0,1,135,80" fill="none" stroke="#1a2535" stroke-width="10" stroke-linecap="round"/>
+          <path d="M15,80 A55,55,0,0,1,135,80" fill="none" stroke="var(--a)" stroke-width="10"
+            stroke-linecap="round" stroke-dasharray="172" stroke-dashoffset="172" id="arc-air"
+            style="transition:stroke-dashoffset .8s ease;filter:drop-shadow(0 0 4px var(--a));"/>
+        </svg>
+      </div>
+      <div class="g-val" id="va" style="color:var(--a)">--<sup> idx</sup></div>
+      <div class="g-lim">Limit: <span id="la">500</span></div>
+    </div>
+
+  </div>
+
+  <!-- LIVE + HISTORY CHART -->
+  <div class="sec-title">Historical Data</div>
+  <div class="chart-card">
+    <div class="chart-toolbar">
+      <div class="tb-group" id="range-btns">
+        <button class="tbtn ar" onclick="setRange('live',this)">&#128308; Live</button>
+        <button class="tbtn" onclick="setRange('hour',this)">1H</button>
+        <button class="tbtn" onclick="setRange('day',this)">1D</button>
+        <button class="tbtn" onclick="setRange('week',this)">1W</button>
+        <button class="tbtn" onclick="setRange('month',this)">1M</button>
+        <button class="tbtn" onclick="setRange('month2',this)">2M</button>
+      </div>
+      <div class="tb-sep"></div>
+      <div class="tb-group">
+        <button class="tbtn mt" id="mb-t" onclick="toggleM('temp')">Temp</button>
+        <button class="tbtn mh" id="mb-h" onclick="toggleM('hum')">Humidity</button>
+        <button class="tbtn ma" id="mb-a" onclick="toggleM('air')">Air</button>
+      </div>
+    </div>
+    <div class="chart-box"><canvas id="mainChart"></canvas></div>
+  </div>
+
+  <!-- FORECAST -->
+  <div class="sec-title">AI Forecast — 7 Day Ahead</div>
+  <div class="forecast-card">
+    <div class="fc-head">
+      <div class="fc-label"><div class="fc-dot"></div>Linear Regression Forecast</div>
+      <button id="fc-btn" onclick="runForecast()">&#9889; Run Forecast</button>
+    </div>
+    <div class="fc-chart-box"><canvas id="fcChart"></canvas></div>
+    <div class="fc-insight" id="fc-insight">
+      <em>Click "Run Forecast" to generate 7-day predictions from sensor history...</em>
+    </div>
+  </div>
+
+  <!-- THRESHOLDS -->
+  <div class="sec-title">Alert Thresholds</div>
+  <div class="settings-card">
+    <div class="settings-grid">
+      <div class="si">
+        <label>&#127777; Temp Limit (°C)</label>
+        <input type="range" id="sl-t" min="20" max="45" value="30"
+          oninput="document.getElementById('sv-t').textContent=this.value+'°C'"/>
+        <div class="sv" id="sv-t">30°C</div>
+      </div>
+      <div class="si">
+        <label>&#128167; Humidity Limit (%)</label>
+        <input type="range" id="sl-h" min="30" max="95" value="75"
+          oninput="document.getElementById('sv-h').textContent=this.value+'%'"/>
+        <div class="sv" id="sv-h">75%</div>
+      </div>
+      <div class="si">
+        <label>&#127787; Air Quality Limit</label>
+        <input type="range" id="sl-a" min="100" max="1000" step="10" value="500"
+          oninput="document.getElementById('sv-a').textContent=this.value"/>
+        <div class="sv" id="sv-a">500</div>
+      </div>
+    </div>
+    <button class="save-btn" onclick="saveThresholds()">&#128190; Save Thresholds</button>
+  </div>
+
+  <!-- ALERT LOG -->
+  <div class="sec-title">Alert Log</div>
+  <div class="alert-card">
+    <ul id="alert-list">
+      <li><span class="no-alert">No alerts yet — system nominal</span></li>
+    </ul>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  CONFIG — Vercel deploy ke baad apna URL daalo
+// ═══════════════════════════════════════════════════════
+var API = window.location.hostname === 'localhost'
+  ? 'http://localhost:3000'
+  : '';   // Vercel pe same origin hoga
+
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+var liveBuffer = [];       // live har 2s readings
+var histData   = [];       // fetched history
+var mainChart  = null;
+var fcChart    = null;
+var activeRange = 'live';
+var showM = { temp:true, hum:true, air:true };
+var limits = { temp:30, hum:75, air:500 };
+var alertLog = [];
+
+// ═══════════════════════════════════════════════════════
+//  CLOCK
+// ═══════════════════════════════════════════════════════
+setInterval(function(){
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+},1000);
+
+// ═══════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════
+function toast(msg,type){
+  var el=document.getElementById('toast');
+  el.textContent=msg; el.className='toast show '+(type||'ok');
+  setTimeout(function(){ el.className='toast'; },2800);
+}
+
+// ═══════════════════════════════════════════════════════
+//  GAUGE UPDATE — instant, no lag
+// ═══════════════════════════════════════════════════════
+function setGauge(id,val,lim,min,max,unit,color){
+  var pct = Math.min(Math.max((val-min)/(max-min),0),1);
+  document.getElementById('arc-'+id).style.strokeDashoffset = 172-(pct*172);
+  var v = document.getElementById('v'+id[0]);
+  v.innerHTML = (typeof val==='number'?val.toFixed(1):val)+'<sup>'+unit+'</sup>';
+
+  var st = document.getElementById('st-'+id);
+  var ratio = val/lim;
+  if(ratio>=1){
+    st.textContent='ALERT'; st.className='g-status s-err';
+  } else if(ratio>=0.85){
+    st.textContent='WARN';  st.className='g-status s-warn';
+  } else {
+    st.textContent='OK';    st.className='g-status s-ok';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  FETCH CURRENT — ESP32 se directly (same network)
+//  Ya Vercel API se (internet pe)
+// ═══════════════════════════════════════════════════════
+var ESP_IP = '';  // Set this if on same network: 'http://10.29.87.254'
+
+async function fetchCurrent(){
+  try {
+    // Pehle ESP32 se try karo agar same network pe ho
+    var url = ESP_IP ? ESP_IP+'/api/current' : API+'/api/latest';
+    var r = await fetch(url, {cache:'no-store'});
+    var d = await r.json();
+
+    setGauge('temp', d.temp, limits.temp, 0,  50,  '°C',  '--t');
+    setGauge('hum',  d.hum,  limits.hum,  0,  100, '%',   '--h');
+    setGauge('air',  d.air,  limits.air,  0,  1000,' idx','--a');
+
+    document.getElementById('last-update').textContent =
+      new Date().toLocaleTimeString();
+
+    // Live buffer update
+    var now = Math.floor(Date.now()/1000);
+    liveBuffer.push({t:now, temp:d.temp, hum:d.hum, air:d.air});
+    if(liveBuffer.length>180) liveBuffer.shift();
+    if(activeRange==='live') renderChart(liveBuffer);
+
+    // Alert check
+    var ts = new Date().toLocaleTimeString();
+    if(d.temp>limits.temp) pushAlert('🌡️','High Temp: '+d.temp.toFixed(1)+'°C',ts);
+    if(d.hum >limits.hum)  pushAlert('💧','High Humidity: '+d.hum.toFixed(1)+'%',ts);
+    if(d.air >limits.air)  pushAlert('🌫️','Poor Air Quality: '+d.air,ts);
+
+  } catch(e){ /* silent fail */ }
+}
+
+// ═══════════════════════════════════════════════════════
+//  ALERT LOG
+// ═══════════════════════════════════════════════════════
+var lastAlertMsg = '';
+function pushAlert(icon,msg,time){
+  if(msg===lastAlertMsg) return;
+  lastAlertMsg = msg;
+  alertLog.unshift({icon,msg,time});
+  if(alertLog.length>100) alertLog.pop();
+  renderAlerts();
+}
+function renderAlerts(){
+  var ul=document.getElementById('alert-list');
+  if(!alertLog.length){
+    ul.innerHTML='<li><span class="no-alert">No alerts — system nominal</span></li>';
+    return;
+  }
+  ul.innerHTML=alertLog.map(function(a){
+    return '<li><span class="al-icon">'+a.icon+'</span>'+
+           '<span class="al-msg">'+a.msg+'</span>'+
+           '<span class="al-time">'+a.time+'</span></li>';
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+//  FETCH ALERTS FROM SERVER
+// ═══════════════════════════════════════════════════════
+async function fetchAlerts(){
+  try {
+    var r = await fetch(API+'/api/alerts');
+    var data = await r.json();
+    if(!data.length) return;
+    alertLog = data.map(function(a){
+      return {
+        icon: a.type==='temp'?'🌡️':a.type==='hum'?'💧':'🌫️',
+        msg: a.type.toUpperCase()+': '+a.value+' (limit: '+a.limit+')',
+        time: new Date(a.created_at).toLocaleTimeString()
+      };
+    });
+    renderAlerts();
+  } catch(e){}
+}
+
+// ═══════════════════════════════════════════════════════
+//  HISTORY CHART
+// ═══════════════════════════════════════════════════════
+async function fetchHistory(range){
+  try {
+    var r = await fetch(API+'/api/data?range='+range);
+    histData = await r.json();
+    histData = histData.map(function(d){
+      return { t:Math.floor(new Date(d.created_at).getTime()/1000),
+               temp:d.temp, hum:d.hum, air:d.air };
+    });
+  } catch(e){ histData=demoHistory(range); }
+  renderChart(histData);
+}
+
+function setRange(range,btn){
+  activeRange=range;
+  document.querySelectorAll('#range-btns .tbtn').forEach(function(b){
+    b.classList.remove('ar');
+  });
+  btn.classList.add('ar');
+  if(range==='live') renderChart(liveBuffer);
+  else fetchHistory(range);
+}
+
+function toggleM(m){
+  showM[m]=!showM[m];
+  var ids={temp:'mb-t',hum:'mb-h',air:'mb-a'};
+  var cls={temp:'mt',hum:'mh',air:'ma'};
+  var btn=document.getElementById(ids[m]);
+  if(showM[m]) btn.classList.add(cls[m]);
+  else btn.classList.remove(cls[m]);
+  var src=(activeRange==='live')?liveBuffer:histData;
+  renderChart(src);
+}
+
+function renderChart(data){
+  var isLive=(activeRange==='live');
+  var labels=data.map(function(r){
+    var d=new Date(r.t*1000);
+    return (isLive||activeRange==='hour')
+      ? d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second: isLive?'2-digit':undefined})
+      : d.toLocaleDateString([],{month:'short',day:'numeric',hour:'2-digit'});
+  });
+  var ds=[];
+  if(showM.temp) ds.push({
+    label:'Temp (°C)', data:data.map(function(r){return r.temp;}),
+    borderColor:'#ff5722',backgroundColor:'rgba(255,87,34,.07)',
+    tension:.35,pointRadius:data.length>100?0:2,fill:true,borderWidth:1.5
+  });
+  if(showM.hum) ds.push({
+    label:'Humidity (%)', data:data.map(function(r){return r.hum;}),
+    borderColor:'#00bcd4',backgroundColor:'rgba(0,188,212,.07)',
+    tension:.35,pointRadius:data.length>100?0:2,fill:true,borderWidth:1.5
+  });
+  if(showM.air) ds.push({
+    label:'Air Quality', data:data.map(function(r){return r.air;}),
+    borderColor:'#69f0ae',backgroundColor:'rgba(105,240,174,.05)',
+    tension:.35,pointRadius:data.length>100?0:2,fill:true,borderWidth:1.5
+  });
+  if(mainChart) mainChart.destroy();
+  var ctx=document.getElementById('mainChart').getContext('2d');
+  mainChart=new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets:ds},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      animation:{duration:isLive?0:400},
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{labels:{color:'#546e7a',font:{family:'JetBrains Mono',size:10}}},
+        tooltip:{backgroundColor:'#0d1320',borderColor:'#1a2535',borderWidth:1,
+          titleColor:'#eceff1',bodyColor:'#90a4ae'}
+      },
+      scales:{
+        x:{ticks:{color:'#546e7a',font:{family:'JetBrains Mono',size:9},maxTicksLimit:10},
+          grid:{color:'rgba(26,37,53,.8)'}},
+        y:{ticks:{color:'#546e7a',font:{family:'JetBrains Mono',size:9}},
+          grid:{color:'rgba(26,37,53,.8)'}}
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  LINEAR REGRESSION FORECAST
+// ═══════════════════════════════════════════════════════
+function linReg(data,key){
+  var n=data.length, sx=0,sy=0,sxy=0,sx2=0;
+  data.forEach(function(d,i){ sx+=i;sy+=d[key];sxy+=i*d[key];sx2+=i*i; });
+  var m=(n*sxy-sx*sy)/(n*sx2-sx*sx||1);
+  var b=(sy-m*sx)/n;
+  return {m,b};
+}
+
+function runForecast(){
+  var btn=document.getElementById('fc-btn');
+  btn.disabled=true; btn.textContent='Calculating...';
+
+  var src = histData.length>=5 ? histData : liveBuffer;
+  if(src.length<5){
+    document.getElementById('fc-insight').innerHTML=
+      '<em>Kam se kam 5 readings chahiye forecast ke liye. Thoda wait karo...</em>';
+    btn.disabled=false; btn.textContent='⚡ Run Forecast';
+    return;
+  }
+
+  var rt=linReg(src,'temp'), rh=linReg(src,'hum'), ra=linReg(src,'air');
+  var base=src.length;
+  var forecast=[],riskDays=[];
+
+  for(var i=1;i<=7;i++){
+    var x=base+i*12;
+    var t=parseFloat((rt.m*x+rt.b).toFixed(1));
+    var h=parseFloat((rh.m*x+rh.b).toFixed(1));
+    var a=Math.round(ra.m*x+ra.b);
+    t=Math.max(15,Math.min(50,t));
+    h=Math.max(10,Math.min(100,h));
+    a=Math.max(0,Math.min(1500,a));
+    if(t>limits.temp||h>limits.hum||a>limits.air) riskDays.push(i);
+    forecast.push({day:'Day '+i,temp:t,hum:h,air:a});
+  }
+
+  // Render forecast chart
+  var bgC=forecast.map(function(_,i){
+    return riskDays.indexOf(i+1)!==-1?'rgba(244,67,54,.3)':'rgba(206,147,216,.12)';
+  });
+  if(fcChart) fcChart.destroy();
+  var ctx=document.getElementById('fcChart').getContext('2d');
+  fcChart=new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:forecast.map(function(f){return f.day;}),
+      datasets:[
+        {type:'line',label:'Temp (°C)',data:forecast.map(function(f){return f.temp;}),
+          borderColor:'#ff5722',tension:.3,pointRadius:5,
+          pointBackgroundColor:forecast.map(function(_,i){
+            return riskDays.indexOf(i+1)!==-1?'#f44336':'#ff5722';}),
+          yAxisID:'yL'},
+        {type:'line',label:'Humidity (%)',data:forecast.map(function(f){return f.hum;}),
+          borderColor:'#00bcd4',tension:.3,pointRadius:4,yAxisID:'yL'},
+        {type:'bar',label:'Air Quality',data:forecast.map(function(f){return f.air;}),
+          backgroundColor:bgC,borderColor:'#69f0ae',borderWidth:1,yAxisID:'yR'}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{labels:{color:'#546e7a',font:{family:'JetBrains Mono',size:10}}},
+        tooltip:{backgroundColor:'#0d1320',borderColor:'#1a2535',borderWidth:1,
+          titleColor:'#eceff1',bodyColor:'#90a4ae'}
+      },
+      scales:{
+        yL:{position:'left',ticks:{color:'#546e7a',font:{family:'JetBrains Mono',size:9}},
+          grid:{color:'rgba(26,37,53,.8)'}},
+        yR:{position:'right',ticks:{color:'#69f0ae',font:{family:'JetBrains Mono',size:9}},
+          grid:{drawOnChartArea:false}},
+        x:{ticks:{color:'#546e7a',font:{family:'JetBrains Mono',size:9}},
+          grid:{color:'rgba(26,37,53,.8)'}}
+      }
+    }
+  });
+
+  // Insight text
+  var tTrend=rt.m>0.01?'Rising':rt.m<-0.01?'Falling':'Stable';
+  var hTrend=rh.m>0.01?'Rising':rh.m<-0.01?'Falling':'Stable';
+  var aMsg=riskDays.length?'Risk days: Day '+riskDays.join(', Day ')+'.':'No threshold breaches expected.';
+  document.getElementById('fc-insight').textContent=
+    'Forecast based on '+src.length+' readings using Linear Regression. '+
+    'Temperature trend: '+tTrend+'. Humidity trend: '+hTrend+'. '+aMsg;
+
+  toast('Forecast ready!','ok');
+  btn.disabled=false; btn.textContent='⚡ Run Forecast';
+}
+
+// ═══════════════════════════════════════════════════════
+//  THRESHOLDS — load + save
+// ═══════════════════════════════════════════════════════
+async function loadThresholds(){
+  try {
+    var r=await fetch(API+'/api/thresholds');
+    var d=await r.json();
+    limits={temp:d.temp_limit,hum:d.hum_limit,air:d.air_limit};
+    document.getElementById('sl-t').value=limits.temp;
+    document.getElementById('sl-h').value=limits.hum;
+    document.getElementById('sl-a').value=limits.air;
+    document.getElementById('sv-t').textContent=limits.temp+'°C';
+    document.getElementById('sv-h').textContent=limits.hum+'%';
+    document.getElementById('sv-a').textContent=limits.air;
+    document.getElementById('lt').textContent=limits.temp;
+    document.getElementById('lh').textContent=limits.hum;
+    document.getElementById('la').textContent=limits.air;
+  } catch(e){}
+}
+
+async function saveThresholds(){
+  var tl=parseFloat(document.getElementById('sl-t').value);
+  var hl=parseFloat(document.getElementById('sl-h').value);
+  var al=parseInt(document.getElementById('sl-a').value);
+  try {
+    await fetch(API+'/api/thresholds',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({temp_limit:tl,hum_limit:hl,air_limit:al})
+    });
+    limits={temp:tl,hum:hl,air:al};
+    document.getElementById('lt').textContent=tl;
+    document.getElementById('lh').textContent=hl;
+    document.getElementById('la').textContent=al;
+    toast('Thresholds saved!','ok');
+  } catch(e){ toast('Save failed!','err'); }
+}
+
+// ═══════════════════════════════════════════════════════
+//  DEMO DATA (jab server na mile)
+// ═══════════════════════════════════════════════════════
+function demoHistory(range){
+  var count={hour:60,day:144,week:168,month:720,month2:1440}[range]||144;
+  var now=Math.floor(Date.now()/1000);
+  return Array.from({length:count},function(_,i){
+    return{t:now-(count-i)*600,
+      temp:27+Math.sin(i/20)*4+Math.random()*.5,
+      hum:58+Math.sin(i/15)*12+Math.random(),
+      air:320+Math.sin(i/10)*180+Math.random()*20};
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════
+loadThresholds();
+fetchAlerts();
+fetchCurrent();
+renderChart(liveBuffer);
+
+// Live update — har 2 second
+setInterval(fetchCurrent, 2000);
+// Alerts refresh — har 30 sec
+setInterval(fetchAlerts, 30000);
+// Thresholds refresh — har 1 min (agar ESP32 ne update kiya ho)
+setInterval(loadThresholds, 60000);
+</script>
+</body>
+</html>
