@@ -547,7 +547,7 @@ function runForecast(){
   var src = histData.length>=5 ? histData : liveBuffer;
   if(src.length<5){
     document.getElementById('fc-insight').innerHTML=
-      '<em>Kam se kam 5 readings chahiye forecast ke liye. Thoda wait karo...</em>';
+      '<em>At least 5 readings are required to generate the forecast. Please wait…</em>';
     btn.disabled=false; btn.textContent='⚡ Run Forecast';
     return;
   }
