@@ -531,7 +531,7 @@ async function fetchHistory(range){
         temp:d.temp,hum:d.hum,air:d.air};
     });
   }catch(e){
-    histData=[];
+    histData=demoHistory(range);
   }
   renderChart(histData);
 }
@@ -709,6 +709,19 @@ async function saveThresholds(){
     document.getElementById('la').textContent=al;
     toast('Thresholds saved!','ok');
   }catch(e){ toast('Save failed!','err'); }
+}
+
+// DEMO DATA
+function demoHistory(range){
+  var count={hour:60,day:144,week:1008,month:4320,month2:8640}[range]||144;
+  var now=Math.floor(Date.now()/1000);
+  var interval={hour:60,day:600,week:600,month:600,month2:600}[range]||600;
+  return Array.from({length:count},function(_,i){
+    return{t:now-(count-i)*interval,
+      temp:27+Math.sin(i/20)*4+Math.random()*.5,
+      hum:58+Math.sin(i/15)*12+Math.random(),
+      air:320+Math.sin(i/10)*180+Math.random()*20};
+  });
 }
 
 // INIT
