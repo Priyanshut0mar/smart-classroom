@@ -68,8 +68,8 @@ main{padding:1.5rem 2rem;max-width:1600px;margin:0 auto;}
 .g-val sup{font-size:.9rem;font-weight:300;color:var(--muted);}
 .g-lim{text-align:center;font-family:var(--mono);font-size:.65rem;color:var(--muted);margin-top:.3rem;}
 
-/* CONTROLS ROW — Buzzer + AC + Exhaust */
-.controls-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;margin-bottom:.5rem;}
+/* CONTROLS ROW — AC + Exhaust (2 columns now) */
+.controls-row{display:grid;grid-template-columns:repeat(2,1fr);gap:1.2rem;margin-bottom:.5rem;}
 @media(max-width:800px){.controls-row{grid-template-columns:1fr;}}
 .ctrl-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.4rem;
   display:flex;align-items:center;justify-content:space-between;gap:1rem;}
@@ -78,7 +78,6 @@ main{padding:1.5rem 2rem;max-width:1600px;margin:0 auto;}
   box-shadow:0 0 0 0 transparent;transition:all .3s;flex-shrink:0;}
 .ctrl-led.on-ac{background:#00bcd4;box-shadow:0 0 10px rgba(0,188,212,.6);}
 .ctrl-led.on-ex{background:#69f0ae;box-shadow:0 0 10px rgba(105,240,174,.6);}
-.ctrl-led.on-bz{background:#ff9800;box-shadow:0 0 10px rgba(255,152,0,.6);}
 .ctrl-label{font-size:.75rem;font-weight:600;}
 .ctrl-sub{font-size:.62rem;color:var(--muted);font-family:var(--mono);margin-top:.15rem;}
 .toggle-wrap{display:flex;align-items:center;gap:.5rem;}
@@ -156,7 +155,6 @@ main{padding:1.5rem 2rem;max-width:1600px;margin:0 auto;}
 .no-alert{color:var(--muted);font-size:.78rem;font-style:italic;padding:.5rem 0;}
 .log-ac{color:#00bcd4;}
 .log-ex{color:#69f0ae;}
-.log-bz{color:#ff9800;}
 
 /* TOAST */
 .toast{position:fixed;bottom:1.5rem;right:1.5rem;
@@ -237,27 +235,9 @@ main{padding:1.5rem 2rem;max-width:1600px;margin:0 auto;}
     </div>
   </div>
 
-  <!-- CONTROLS: Buzzer + AC + Exhaust -->
+  <!-- CONTROLS: AC + Exhaust -->
   <div class="sec-title">System Controls</div>
   <div class="controls-row">
-
-    <!-- Buzzer -->
-    <div class="ctrl-card">
-      <div class="ctrl-info">
-        <div class="ctrl-led" id="led-bz"></div>
-        <div>
-          <div class="ctrl-label">&#128266; Buzzer</div>
-          <div class="ctrl-sub" id="bz-status">Standby</div>
-        </div>
-      </div>
-      <div class="toggle-wrap">
-        <span class="toggle-label" id="bz-lbl">OFF</span>
-        <label class="toggle">
-          <input type="checkbox" id="bz-toggle" checked onchange="toggleBuzzer(this)"/>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-    </div>
 
     <!-- AC -->
     <div class="ctrl-card">
@@ -371,7 +351,7 @@ main{padding:1.5rem 2rem;max-width:1600px;margin:0 auto;}
 
 <script>
 var API = window.location.hostname==='localhost' ? 'http://localhost:3000' : '';
-var ESP_IP = ''; // Same network direct fetch
+var ESP_IP = '';
 
 // STATE
 var liveBuffer=[], histData=[], mainChart=null, fcChart=null;
@@ -379,9 +359,7 @@ var activeRange='live';
 var showM={temp:true,hum:true,air:true};
 var limits={temp:30,hum:75,air:500};
 var alertLog=[];
-var buzzerEnabled=true;
 var acOn=false, exhaustOn=false;
-var lastAlertMsg='';
 
 // CLOCK
 setInterval(function(){
@@ -406,13 +384,6 @@ function setGauge(id,val,lim,min,max,unit){
   if(ratio>=1){ st.textContent='ALERT'; st.className='g-status s-err'; }
   else if(ratio>=0.85){ st.textContent='WARN'; st.className='g-status s-warn'; }
   else { st.textContent='OK'; st.className='g-status s-ok'; }
-}
-
-// BUZZER TOGGLE
-function toggleBuzzer(cb){
-  buzzerEnabled=cb.checked;
-  document.getElementById('bz-lbl').textContent=buzzerEnabled?'ON':'OFF';
-  toast('Buzzer '+(buzzerEnabled?'enabled':'disabled'), buzzerEnabled?'ok':'err');
 }
 
 // AC TOGGLE
@@ -454,13 +425,6 @@ function updateExhaustLED(on){
   document.getElementById('ex-toggle').checked=on;
 }
 
-function updateBuzzerLED(on){
-  var led=document.getElementById('led-bz');
-  var sub=document.getElementById('bz-status');
-  led.className='ctrl-led'+(on?' on-bz':'');
-  sub.textContent=on?'ALERTING!':'Standby';
-}
-
 // FETCH CURRENT
 async function fetchCurrent(){
   try{
@@ -473,7 +437,6 @@ async function fetchCurrent(){
     setGauge('air',d.air,limits.air,0,1000,' idx');
     document.getElementById('last-update').textContent=new Date().toLocaleTimeString();
 
-    // Live buffer
     var now=Math.floor(Date.now()/1000);
     liveBuffer.push({t:now,temp:d.temp,hum:d.hum,air:d.air});
     if(liveBuffer.length>180) liveBuffer.shift();
@@ -483,28 +446,23 @@ async function fetchCurrent(){
 
     // TEMP check → AC auto ON
     if(d.temp>limits.temp){
-      if(buzzerEnabled) updateBuzzerLED(true);
       if(!acOn){
         acOn=true; updateACLED(true);
         pushAlert('❄️','AC AUTO ON — High Temp: '+d.temp.toFixed(1)+'°C',ts);
       }
       pushAlert('🌡️','High Temp: '+d.temp.toFixed(1)+'°C (Limit: '+limits.temp+'°C)',ts);
-      setTimeout(function(){ updateBuzzerLED(false); },2000);
     } else if(d.temp<=limits.temp-2 && acOn){
-      // Temp normal ho gayi — AC off
       acOn=false; updateACLED(false);
       pushAlert('❄️','AC AUTO OFF — Temp normal: '+d.temp.toFixed(1)+'°C',ts);
     }
 
     // HUMIDITY check → Exhaust auto ON
     if(d.hum>limits.hum){
-      if(buzzerEnabled) updateBuzzerLED(true);
       if(!exhaustOn){
         exhaustOn=true; updateExhaustLED(true);
         pushAlert('🌀','Exhaust AUTO ON — High Humidity: '+d.hum.toFixed(1)+'%',ts);
       }
       pushAlert('💧','High Humidity: '+d.hum.toFixed(1)+'% (Limit: '+limits.hum+'%)',ts);
-      setTimeout(function(){ updateBuzzerLED(false); },2000);
     } else if(d.hum<=limits.hum-5 && exhaustOn){
       exhaustOn=false; updateExhaustLED(false);
       pushAlert('🌀','Exhaust AUTO OFF — Humidity normal: '+d.hum.toFixed(1)+'%',ts);
@@ -512,9 +470,7 @@ async function fetchCurrent(){
 
     // AIR check
     if(d.air>limits.air){
-      if(buzzerEnabled) updateBuzzerLED(true);
       pushAlert('🌫️','Poor Air Quality: '+d.air+' (Limit: '+limits.air+')',ts);
-      setTimeout(function(){ updateBuzzerLED(false); },2000);
     }
 
   }catch(e){ /* silent */ }
@@ -522,7 +478,6 @@ async function fetchCurrent(){
 
 // ALERT LOG
 function pushAlert(icon,msg,time){
-  // Duplicate check — same msg 10s ke andar nahi
   if(alertLog.length>0 && alertLog[0].msg===msg) return;
   alertLog.unshift({icon:icon,msg:msg,time:time});
   if(alertLog.length>200) alertLog.pop();
@@ -538,7 +493,6 @@ function renderAlerts(){
     var cls='';
     if(a.icon==='❄️') cls='log-ac';
     else if(a.icon==='🌀') cls='log-ex';
-    else if(a.icon==='🔔') cls='log-bz';
     return '<li><span class="al-icon">'+a.icon+'</span>'+
            '<span class="al-msg '+cls+'">'+a.msg+'</span>'+
            '<span class="al-time">'+a.time+'</span></li>';
@@ -551,14 +505,12 @@ async function fetchAlerts(){
     var r=await fetch(API+'/api/alerts');
     var data=await r.json();
     if(!data||!data.length) return;
-    // Server alerts ko local log mein merge karo
     var serverAlerts=data.map(function(a){
       var icon=a.type==='temp'?'🌡️':a.type==='hum'?'💧':'🌫️';
       return{icon:icon,
         msg:a.type.toUpperCase()+': '+a.value+' (limit: '+a.alert_limit+')',
         time:new Date(a.created_at).toLocaleTimeString()};
     });
-    // Sirf nayi alerts add karo
     serverAlerts.forEach(function(sa){
       var exists=alertLog.some(function(al){ return al.msg===sa.msg && al.time===sa.time; });
       if(!exists) alertLog.push(sa);
